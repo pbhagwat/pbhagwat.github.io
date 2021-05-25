@@ -2679,7 +2679,7 @@ windowItem.CPVisuallyComplete = (function () {
 RProfiler.addInfo( 'tracepoint', 'env', 'prod');
 setTimeout(() => {
   RProfiler.addInfo( 'tracepoint', 'delayedTP', 'true'); 
-  window.dispatchEvent('newPageViewPost');
+  window.dispatchEvent(new Event('newPageViewPost'));
 }, 10000);
 	
 </script>
