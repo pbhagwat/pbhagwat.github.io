@@ -2669,7 +2669,12 @@ windowItem.CPVisuallyComplete = (function () {
         reset: visComplete.reset,
     };
 })();
-
+	
+RProfiler.addInfo( 'tracepoint', 'env', 'prod');
+setTimeout(() => {
+  RProfiler.addInfo( 'tracepoint', 'delayedTP', 'true');  
+}, 10000);
+	
 </script>
 		<title>Story by HTML5 UP</title>
 		<meta charset="utf-8" />
