@@ -396,7 +396,7 @@ var RProfiler = (function () {
         if (!!window["__cpCdnPath"]) {
             this.restUrl = window["__cpCdnPath"].trim();
         }
-        var protocol = window.location.protocol;
+       /* var protocol = window.location.protocol;
         var iframe = document.createElement("iframe");
         iframe.src = "about:blank";
         var style = iframe.style;
@@ -414,7 +414,7 @@ var RProfiler = (function () {
             }
         });
         var topScript = document.getElementsByTagName("script")[0];
-        topScript.parentNode.insertBefore(iframe, topScript);
+        topScript.parentNode.insertBefore(iframe, topScript); */
     }
     RProfiler.prototype.isNullOrEmpty = function (val) {
         if (val === undefined || val === null) {
