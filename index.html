@@ -325,6 +325,9 @@ var RProfiler = (function () {
             }
             errorArr.push(new ProfilerJsError(msg, url, lineNum));
         };
+	this.postOnloadData(){
+	  
+	}
         this.getAjaxRequests = function () {
             return _this.ajaxHandler.getAjaxRequests();
         };
@@ -2031,12 +2034,15 @@ var DataWrapper = (function () {
             if (!profiler.data.loadFired && !!pageWindow.document) {
                 profiler.data.loadFired = pageWindow.document.readyState === "complete";
             }
-            if (profiler.data.loadFired) {
+           /* if (profiler.data.loadFired) {
                 loadPost();
             }
             else {
                 profiler.eventManager.add(windowEventDef.Load, parent.window, loadPost);
-            }
+            } */
+	   window.addEventListener('newPageViewPost', () => {
+		    loadPost()
+	    });
             var didUnloadPost = false;
             var unloadPost = function () {
                 if (didUnloadPost) {
@@ -2675,7 +2681,8 @@ windowItem.CPVisuallyComplete = (function () {
 	
 RProfiler.addInfo( 'tracepoint', 'env', 'prod');
 setTimeout(() => {
-  RProfiler.addInfo( 'tracepoint', 'delayedTP', 'true');  
+  RProfiler.addInfo( 'tracepoint', 'delayedTP', 'true'); 
+  window.dispatchEvent('newPageViewPost');
 }, 10000);
 	
 </script>
