@@ -2133,10 +2133,12 @@ var DataWrapper = (function () {
             if (profiler.hasInsight) {
                 this.addInsightForPost(postObj);
                 //profiler.clearInfo();
-            }
-	    if (profiler.hasInsight && ev === PostType.OnBeforeUnload){
+		    
+	     if (ev === PostType.OnBeforeUnload){
 		profiler.clearInfo();  
-	    }
+	       }
+           }
+	    
             return postObj;
         };
         DataProvider.prototype.addPerformanceMarksToPostData = function (performance, postObj) {
