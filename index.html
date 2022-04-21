@@ -960,11 +960,6 @@ window["RProfiler"] = profiler;
 window["WindowEvent"] = WindowEvent;
 profiler.dispatchCustomEvent("GlimpseLoaded");
 
-(async () => {
-    var result = await fetch('https://www.websee.com/companies/getcompanieslist');
-    console.log(result);                                     
-})();
-	
 
 </script>
 		<title>Story by HTML5 UP</title>
@@ -1305,7 +1300,7 @@ profiler.dispatchCustomEvent("GlimpseLoaded");
 			</div>
             <script>
 
-		    // Use async await 
+		    /* Use async await 
 (async () => {
     var result = await fetch('https://www.websee.com/companies/getcompanieslist');
     console.log(result);                                     
@@ -1314,8 +1309,12 @@ profiler.dispatchCustomEvent("GlimpseLoaded");
 // Fetch chaining
 fetch('https://www.websee.com/companies/getcompanieslist')
 .then( data => data.json())
-.then (data => console.log(data));
+.then (data => console.log(data)); */
 
+fetch({ url: 'https://www.websee.com/companies/getcompanieslist'})
+.then( data => data.json())
+.then (data => console.log(data));		    
+		    
 //XHR
 function makeAjaxCalls(url){
     let xhr = new XMLHttpRequest();
@@ -1344,9 +1343,9 @@ function makeAjaxCalls(url){
         xhr.send();
 }
 
- makeAjaxCalls('https://www.websee.com/companies/listpremiumcompanies?max-age=12');
- makeAjaxCalls('https://www.websee.com/companies/getcompanieslist');
- makeAjaxCalls('https://www.websee.com/companies/listpremiumcompanies?max-age=12');
+ //makeAjaxCalls('https://www.websee.com/companies/listpremiumcompanies?max-age=12');
+// makeAjaxCalls('https://www.websee.com/companies/getcompanieslist');
+// makeAjaxCalls('https://www.websee.com/companies/listpremiumcompanies?max-age=12');
 			</script>
 		<!-- Scripts -->
 			<script src="assets/js/jquery.min.js"></script>
