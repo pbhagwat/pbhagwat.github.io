@@ -1298,7 +1298,12 @@ fetch('https://www.websee.com/companies/getcompanieslist')
 .then( data => data.json())
 .then (data => console.log(data)); */
 
-fetch({ url: 'https://www.websee.com/companies/getcompanieslist'})
+const myRequest = new Request('https://www.websee.com/companies/getcompanieslist', {
+  method: 'GET',
+  mode: 'cors',
+  cache: 'default',
+});
+fetch(myRequest)
 .then( data => data.json())
 .then (data => console.log(data));		    
 		    
