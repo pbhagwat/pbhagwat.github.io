@@ -533,7 +533,7 @@ var AjaxRequestsHandler = (function () {
 var RProfiler = (function () {
     function RProfiler() {
         var _this = this;
-        this.restUrl = "localhost:3357/jp/1826/v3.3.4/s.M";
+        this.restUrl = "portalstage.catchpoint.com/jp/1826/v3.3.4/M";
         this.startTime = (new Date()).getTime();
         this.eventsTimingHandler = new EventsTimingHandler();
         this.inputDelay = new InputDelayHandler();
@@ -959,6 +959,7 @@ var profiler = new RProfiler();
 window["RProfiler"] = profiler;
 window["WindowEvent"] = WindowEvent;
 profiler.dispatchCustomEvent("GlimpseLoaded");
+
 
 
 </script>
