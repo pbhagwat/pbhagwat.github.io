@@ -7,6 +7,234 @@
 <html>
 	<head>
 <script type='text/javascript'>
+var generateUniqueID = function () {
+    return "v2-" + Date.now() + "-" + (Math.floor(Math.random() * (9e12 - 1)) + 1e12);
+};
+var firstHiddenTime = -1;
+var initHiddenTime = function () {
+    return document.visibilityState === 'hidden' ? 0 : Infinity;
+};
+var trackChanges = function () {
+    onHidden(function (_a) {
+        var timeStamp = _a.timeStamp;
+        firstHiddenTime = timeStamp;
+    }, true);
+};
+var getVisibilityWatcher = function () {
+    if (firstHiddenTime < 0) {
+        if (window.__WEB_VITALS_POLYFILL__) {
+            firstHiddenTime = window.webVitals.firstHiddenTime;
+            if (firstHiddenTime === Infinity) {
+                trackChanges();
+            }
+        }
+        else {
+            firstHiddenTime = initHiddenTime();
+            trackChanges();
+        }
+        onBFCacheRestore(function () {
+            setTimeout(function () {
+                firstHiddenTime = initHiddenTime();
+                trackChanges();
+            }, 0);
+        });
+    }
+    return {
+        get firstHiddenTime() {
+            return firstHiddenTime;
+        }
+    };
+};
+var onBFCacheRestore = function (cb) {
+    addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            cb(event);
+        }
+    }, true);
+};
+var bindReporter = function (callback, metric, reportAllChanges) {
+    var prevValue;
+    return function (forceReport) {
+        if (metric.value >= 0) {
+            if (forceReport || reportAllChanges) {
+                metric.delta = metric.value - (prevValue || 0);
+                if (metric.delta || prevValue === undefined) {
+                    prevValue = metric.value;
+                    callback(metric);
+                }
+            }
+        }
+    };
+};
+var onHidden = function (cb, once) {
+    var onHiddenOrPageHide = function (event) {
+        if (event.type === 'pagehide' || document.visibilityState === 'hidden') {
+            cb(event);
+            if (once) {
+                removeEventListener('visibilitychange', onHiddenOrPageHide, true);
+                removeEventListener('pagehide', onHiddenOrPageHide, true);
+            }
+        }
+    };
+    addEventListener('visibilitychange', onHiddenOrPageHide, true);
+    addEventListener('pagehide', onHiddenOrPageHide, true);
+};
+var observe = function (type, callback) {
+    try {
+        if (PerformanceObserver.supportedEntryTypes.indexOf(type) > -1) {
+            if (type === 'first-input' && !('PerformanceEventTiming' in self)) {
+                return;
+            }
+            var po = new PerformanceObserver(function (l) { return l.getEntries().map(callback); });
+            po.observe({ type: type, buffered: true });
+            return po;
+        }
+    }
+    catch (e) {
+    }
+    return;
+};
+var getFCP = function (onReport, reportAllChanges) {
+    var visibilityWatcher = getVisibilityWatcher();
+    var metric = initMetric('FCP');
+    var report;
+    var entryHandler = function (entry) {
+        if (entry.name === 'first-contentful-paint') {
+            if (po) {
+                po.disconnect();
+            }
+            if (entry.startTime < visibilityWatcher.firstHiddenTime) {
+                metric.value = entry.startTime;
+                metric.entries.push(entry);
+                report(true);
+            }
+        }
+    };
+    var fcpEntry = window.performance && performance.getEntriesByName &&
+        performance.getEntriesByName('first-contentful-paint')[0];
+    var po = fcpEntry ? null : observe('paint', entryHandler);
+    if (fcpEntry || po) {
+        report = bindReporter(onReport, metric, reportAllChanges);
+        if (fcpEntry) {
+            entryHandler(fcpEntry);
+        }
+        onBFCacheRestore(function (event) {
+            metric = initMetric('FCP');
+            report = bindReporter(onReport, metric, reportAllChanges);
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    metric.value = performance.now() - event.timeStamp;
+                    report(true);
+                });
+            });
+        });
+    }
+};
+var initMetric = function (name, value) {
+    return {
+        name: name,
+        value: typeof value === 'undefined' ? -1 : value,
+        delta: 0,
+        entries: [],
+        id: generateUniqueID()
+    };
+};
+var isMonitoringFCP = false;
+var fcpValue = -1;
+var reportedMetricIDs = {};
+var getLCP = function (onReport, reportAllChanges) {
+    var visibilityWatcher = getVisibilityWatcher();
+    var metric = initMetric('LCP');
+    var report;
+    var entryHandler = function (entry) {
+        var value = entry.startTime;
+        if (value < visibilityWatcher.firstHiddenTime) {
+            metric.value = value;
+            metric.entries.push(entry);
+            report(true);
+        }
+    };
+    var po = observe('largest-contentful-paint', entryHandler);
+    if (po) {
+        report = bindReporter(onReport, metric, reportAllChanges);
+        var stopListening_1 = function () {
+            if (!reportedMetricIDs[metric.id]) {
+                po.takeRecords().map(entryHandler);
+                po.disconnect();
+                reportedMetricIDs[metric.id] = true;
+                report(true);
+            }
+        };
+        ['keydown', 'click'].forEach(function (type) {
+            addEventListener(type, stopListening_1, { once: true, capture: true });
+        });
+        onHidden(stopListening_1, true);
+        onBFCacheRestore(function (event) {
+            metric = initMetric('LCP');
+            report = bindReporter(onReport, metric, reportAllChanges);
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    metric.value = performance.now() - event.timeStamp;
+                    reportedMetricIDs[metric.id] = true;
+                    report(true);
+                });
+            });
+        });
+    }
+};
+var getCLS = function (onReport, reportAllChanges) {
+    if (!isMonitoringFCP) {
+        getFCP(function (metric) {
+            fcpValue = metric.value;
+        });
+        isMonitoringFCP = true;
+    }
+    var onReportWrapped = function (arg) {
+        if (fcpValue > -1) {
+            onReport(arg);
+        }
+    };
+    var metric = initMetric('CLS', 0);
+    var report;
+    var sessionValue = 0;
+    var sessionEntries = [];
+    var entryHandler = function (entry) {
+        if (!entry.hadRecentInput) {
+            var firstSessionEntry = sessionEntries[0];
+            var lastSessionEntry = sessionEntries[sessionEntries.length - 1];
+            if (sessionValue &&
+                entry.startTime - lastSessionEntry.startTime < 1000 &&
+                entry.startTime - firstSessionEntry.startTime < 5000) {
+                sessionValue += entry.value;
+                sessionEntries.push(entry);
+            }
+            else {
+                sessionValue = entry.value;
+                sessionEntries = [entry];
+            }
+            if (sessionValue > metric.value) {
+                metric.value = sessionValue;
+                metric.entries = sessionEntries;
+                report(true);
+            }
+        }
+    };
+    var po = observe('layout-shift', entryHandler);
+    if (po) {
+        report = bindReporter(onReportWrapped, metric, reportAllChanges);
+        onHidden(function () {
+            po.takeRecords().map(entryHandler);
+            report(true);
+        });
+        onBFCacheRestore(function () {
+            sessionValue = 0;
+            fcpValue = -1;
+            metric = initMetric('CLS', 0);
+            report = bindReporter(onReportWrapped, metric, reportAllChanges);
+        });
+    }
+};
+var windowCurrent = parent.window || window;
 var WindowEvent;
 (function (WindowEvent) {
     WindowEvent["Load"] = "load";
@@ -85,13 +313,222 @@ var ProfilerEventManager = (function () {
         }
     };
     ProfilerEventManager.prototype.clear = function () {
-        for (var _i = 0, _a = this.events; _i < _a.length; _i++) {
-            var ev = _a[_i];
+        var events = this.events;
+        for (var i = 0; i < events.length; i++) {
+            var ev = events[i];
             this.remove(ev.type, ev.target, ev.func);
         }
         this.events = [];
     };
     return ProfilerEventManager;
+}());
+var AjaxRequestsHandler = (function () {
+    function AjaxRequestsHandler() {
+        var _this = this;
+        this.fetchRequests = [];
+        this.fetchEntriesIndices = {};
+        this.compareEntriesDelay = 100;
+        this.hasPerformance = typeof window.performance === "object" && typeof window.performance.now === "function" && typeof window.performance.getEntriesByType === "function";
+        this.captureFetchRequests = function () {
+            var tempArray = [];
+            var ajaxHandler = _this;
+            var onRequestError = function (error) {
+                return error;
+            };
+            var onResponseError = function (error) {
+                return Promise.reject(error);
+            };
+            if (!window.fetch) {
+                return;
+            }
+            window.fetch = (function (fetch) {
+                return function () {
+                    var args = [];
+                    for (var _i = 0; _i < arguments.length; _i++) {
+                        args[_i] = arguments[_i];
+                    }
+                    var fetchRequestIndex = 0;
+                    var promise = Promise.resolve(args);
+                    promise = promise.then(function (args) {
+                        var firstArg;
+                        var config = {};
+                        if (args.length && args.length >= 1) {
+                            firstArg = args[0];
+                            if (args.length > 1) {
+                                config = args[1];
+                            }
+                        }
+                        else {
+                            return [];
+                        }
+                        var method = 'GET';
+                        if (config.method) {
+                            method = config.method;
+                        }
+                        fetchRequestIndex = tempArray.length;
+                        var fetchUrl = '';
+                        if (typeof (firstArg) === 'object' && !!firstArg) {
+                            if (Array.isArray(firstArg) && firstArg.length > 0) {
+                                fetchUrl = firstArg[0];
+                            }
+                            else {
+                                fetchUrl = firstArg.url;
+                            }
+                        }
+                        else {
+                            fetchUrl = firstArg;
+                        }
+                        if (fetchUrl) {
+                            tempArray.push(new AjaxTiming(fetchUrl, method, true, ajaxHandler.now()));
+                        }
+                        return [firstArg, config];
+                    }, onRequestError);
+                    promise = promise.then(function (args) { return fetch.apply(void 0, args); });
+                    promise = promise.then(function (response) {
+                        var fetchRequest = tempArray[fetchRequestIndex];
+                        var requestArray = ajaxHandler.fetchRequests;
+                        ajaxHandler.processPerformanceEntries(fetchRequest, requestArray);
+                        return response;
+                    }, onResponseError);
+                    return promise;
+                };
+            })(window.fetch);
+        };
+        this.captureFetchRequests();
+        AjaxRequestsHandler.startAjaxCapture(this);
+    }
+    AjaxRequestsHandler.prototype.getAjaxRequests = function () {
+        return this.fetchRequests;
+    };
+    AjaxRequestsHandler.prototype.clear = function () {
+        this.fetchRequests = [];
+    };
+    AjaxRequestsHandler.prototype.now = function () {
+        if (this.hasPerformance) {
+            return window.performance.now();
+        }
+        return (new Date()).getTime();
+    };
+    AjaxRequestsHandler.prototype.processPerformanceEntries = function (fetchRequest, requestArray) {
+        var ajaxHandler = this;
+        setTimeout(function () {
+            if (!ajaxHandler.hasPerformance) {
+                return;
+            }
+            var url = fetchRequest.url;
+            var matches = [];
+            var entries = performance.getEntriesByType("resource");
+            for (var _i = 0, entries_1 = entries; _i < entries_1.length; _i++) {
+                var entry = entries_1[_i];
+                if (entry.name === url) {
+                    matches.push(entry);
+                }
+            }
+            requestArray.push(fetchRequest);
+            if (matches.length === 0) {
+                return;
+            }
+            if (!ajaxHandler.fetchEntriesIndices[url]) {
+                ajaxHandler.fetchEntriesIndices[url] = [];
+            }
+            if (matches.length === 1) {
+                fetchRequest.getPerformanceTimings(matches[0]);
+                ajaxHandler.fetchEntriesIndices[url].push(0);
+                return;
+            }
+            var u = ajaxHandler.fetchEntriesIndices[url];
+            for (var index in matches) {
+                if (u.indexOf(index) !== -1) {
+                    continue;
+                }
+                fetchRequest.getPerformanceTimings(matches[index]);
+                u.push(index);
+                return;
+            }
+            fetchRequest.getPerformanceTimings(matches[0]);
+        }, ajaxHandler.compareEntriesDelay);
+    };
+    AjaxRequestsHandler.startAjaxCapture = function (ajaxHandler) {
+        var xhr = XMLHttpRequest.prototype;
+        var open = xhr.open;
+        var send = xhr.send;
+        var tempArray = [];
+        if (ajaxHandler.hasPerformance && typeof window.performance.setResourceTimingBufferSize === "function") {
+            window.performance.setResourceTimingBufferSize(300);
+        }
+        xhr.open = function (method, url, async, user, password) {
+            this.rpIndex = tempArray.length;
+            tempArray.push(new AjaxTiming(url, method, async, ajaxHandler.now()));
+            open.call(this, method, url, (async === false) ? false : true, user, password);
+        };
+        xhr.send = function (data) {
+            var _this = this;
+            var changeFunc = this.onreadystatechange;
+            this.onreadystatechange = function (arg) {
+                var request = tempArray[_this.rpIndex];
+                if (!request) {
+                    return;
+                }
+                var state = _this.readyState;
+                var hasResponse = !!(_this.response && _this.response !== null && _this.response !== undefined);
+                switch (state) {
+                    case 0:
+                        break;
+                    case 1:
+                        request.connectionEstablished = ajaxHandler.now();
+                        break;
+                    case 2:
+                        request.requestReceived = ajaxHandler.now();
+                        break;
+                    case 3:
+                        request.processingTime = ajaxHandler.now();
+                        break;
+                    case 4:
+                        request.complete = ajaxHandler.now();
+                        switch (_this.responseType) {
+                            case "text":
+                            case "":
+                                if (typeof _this.responseText === "string") {
+                                    request.responseSize = _this.responseText.length;
+                                }
+                                break;
+                            case "json":
+                                if (hasResponse && typeof _this.response.toString === "function") {
+                                    request.responseSize = _this.response.toString().length;
+                                }
+                                break;
+                            case "arraybuffer":
+                                if (hasResponse && typeof _this.response.byteLength === "number") {
+                                    request.responseSize = _this.response.byteLength;
+                                }
+                                break;
+                            case "blob":
+                                if (hasResponse && typeof _this.response.size === "number") {
+                                    request.responseSize = _this.response.size;
+                                }
+                                break;
+                            case "document":
+                                break;
+                        }
+                        ajaxHandler.processPerformanceEntries(request, ajaxHandler.fetchRequests);
+                        break;
+                }
+                if (typeof changeFunc === "function") {
+                    changeFunc.call(_this, arg);
+                }
+            };
+            var request = tempArray[this.rpIndex];
+            if (!request) {
+                return;
+            }
+            if (data && !isNaN(data.length)) {
+                request.sendSize = data.length;
+            }
+            request.send = ajaxHandler.now();
+            send.call(this, data);
+        };
+    };
+    return AjaxRequestsHandler;
 }());
 var RProfiler = (function () {
     function RProfiler() {
@@ -109,136 +546,17 @@ var RProfiler = (function () {
             jsErrors: [],
             loadTime: -1,
             loadFired: window.document.readyState == "complete",
-            ajax: []
         };
         this.eventManager = new ProfilerEventManager();
-        this.startAjaxCapture = function () {
-            var xhr = XMLHttpRequest.prototype;
-            var open = xhr.open;
-            var send = xhr.send;
-            var tempArray = [];
-            var used = {};
-            var array = _this.data.ajax;
-            var compareEntriesDelay = 25;
-            var hasPerformance = typeof window.performance === "object" && typeof window.performance.now === "function" && typeof window.performance.getEntriesByType === "function";
-            if (hasPerformance && typeof window.performance.setResourceTimingBufferSize === "function") {
-                window.performance.setResourceTimingBufferSize(300);
-            }
-            var now = function () {
-                if (hasPerformance) {
-                    return window.performance.now();
-                }
-                return (new Date()).getTime();
-            };
-            xhr.open = function (method, url, async, user, password) {
-                if (async === void 0) { async = true; }
-                this.rpIndex = tempArray.length;
-                tempArray.push(new AjaxTiming(url, method, async, now()));
-                open.call(this, method, url, async, user, password);
-            };
-            xhr.send = function (data) {
-                var _this = this;
-                var changeFunc = this.onreadystatechange;
-                this.onreadystatechange = function (arg) {
-                    var request = tempArray[_this.rpIndex];
-                    if (!request) {
-                        return;
-                    }
-                    var state = _this.readyState;
-                    switch (state) {
-                        case 0:
-                            break;
-                        case 1:
-                            request.connectionEstablished = now();
-                            break;
-                        case 2:
-                            request.requestReceived = now();
-                            break;
-                        case 3:
-                            request.processingTime = now();
-                            break;
-                        case 4:
-                            request.complete = now();
-                            var hasResponse = !!(_this.response && _this.response != null && _this.response != undefined);
-                            switch (_this.responseType) {
-                                case "text":
-                                case "":
-                                    if (typeof _this.responseText == "string") {
-                                        request.responseSize = _this.responseText.length;
-                                    }
-                                    break;
-                                case "json":
-                                    if (hasResponse && typeof _this.response.toString == "function") {
-                                        request.responseSize = _this.response.toString().length;
-                                    }
-                                    break;
-                                case "arraybuffer":
-                                    if (hasResponse && typeof _this.response.byteLength == "number") {
-                                        request.responseSize = _this.response.byteLength;
-                                    }
-                                    break;
-                                case "blob":
-                                    if (hasResponse && typeof _this.response.size == "number") {
-                                        request.responseSize = _this.response.size;
-                                    }
-                                    break;
-                                case "document":
-                                    break;
-                            }
-                            (function (req, arr) {
-                                setTimeout(function () {
-                                    if (!hasPerformance) {
-                                        return;
-                                    }
-                                    var url = req.url;
-                                    var matches = new Array();
-                                    var entries = performance.getEntriesByType("resource");
-                                    for (var _i = 0, entries_1 = entries; _i < entries_1.length; _i++) {
-                                        var entry = entries_1[_i];
-                                        if (entry.name == url) {
-                                            matches.push(entry);
-                                        }
-                                    }
-                                    array.push(req);
-                                    if (matches.length == 0) {
-                                        return;
-                                    }
-                                    if (!used[url]) {
-                                        used[url] = [];
-                                    }
-                                    if (matches.length == 1) {
-                                        req.getPerformanceTimings(matches[0]);
-                                        used[url].push(0);
-                                        return;
-                                    }
-                                    var u = used[url];
-                                    for (var index in matches) {
-                                        if (u.indexOf(index) != -1) {
-                                            continue;
-                                        }
-                                        req.getPerformanceTimings(matches[index]);
-                                        u.push(index);
-                                        return;
-                                    }
-                                    req.getPerformanceTimings(matches[0]);
-                                }, compareEntriesDelay);
-                            })(request, array);
-                            break;
-                    }
-                    if (typeof changeFunc == "function") {
-                        changeFunc.call(_this, arg);
-                    }
-                };
-                var request = tempArray[this.rpIndex];
-                if (!request) {
-                    return;
-                }
-                if (data && !isNaN(data.length)) {
-                    request.sendSize = data.length;
-                }
-                request.send = now();
-                send.call(this, data);
-            };
+        this.setCLS = function (_a) {
+            var metricName = _a.name, metricValue = _a.delta;
+            var CLS = metricName === 'CLS' ? metricValue : undefined;
+            _this.cls = CLS;
+        };
+        this.setLCP = function (_a) {
+            var metricName = _a.name, metricValue = _a.delta;
+            var LCP = metricName === 'LCP' ? metricValue : undefined;
+            _this.lcp = LCP;
         };
         this.recordPageLoad = function () {
             _this.data.loadTime = (new Date()).getTime();
@@ -256,6 +574,12 @@ var RProfiler = (function () {
                 }
             }
             errorArr.push(new ProfilerJsError(msg, url, lineNum));
+        };
+        this.getAjaxRequests = function () {
+            return _this.ajaxHandler.getAjaxRequests();
+        };
+        this.clearAjaxRequests = function () {
+            _this.ajaxHandler.clear();
         };
         this.addInfo = function (infoType, key, value) {
             if (_this.isNullOrEmpty(infoType)) {
@@ -283,9 +607,6 @@ var RProfiler = (function () {
             _this.data.jsCount = 0;
             _this.data.jsErrors = [];
         };
-        this.clearAjax = function () {
-            _this.data.ajax = [];
-        };
         this.getInfo = function () {
             if (!_this.hasInsight) {
                 return null;
@@ -298,9 +619,19 @@ var RProfiler = (function () {
         this.getInputDelay = function () {
             return _this.inputDelay;
         };
+        this.getCPWebVitals = function () {
+            getCLS(_this.setCLS, true);
+            getLCP(_this.setLCP, true);
+            return {
+                cls: _this.cls,
+                lcp: _this.lcp
+            };
+        };
         this.eventManager.add(WindowEvent.Load, window, this.recordPageLoad);
         var errorFunc = this.addError;
-        this.startAjaxCapture();
+        this.ajaxHandler = new AjaxRequestsHandler();
+        getCLS(this.setCLS, true);
+        getLCP(this.setLCP, true);
         function recordJsError(e) {
             var ev = e.target || e.srcElement;
             if (ev.nodeType == 3) {
@@ -629,6 +960,11 @@ window["RProfiler"] = profiler;
 window["WindowEvent"] = WindowEvent;
 profiler.dispatchCustomEvent("GlimpseLoaded");
 
+(async () => {
+    var result = await fetch('https://www.websee.com/companies/getcompanieslist');
+    console.log(result);                                     
+})();
+	
 
 </script>
 		<title>Story by HTML5 UP</title>
