@@ -350,10 +350,10 @@ var AjaxRequestsHandler = (function () {
                     var fetchRequestIndex = 0;
                     var promise = Promise.resolve(args);
                     promise = promise.then(function (args) {
-                        var firstArg;
+                        var url = '';
                         var config = {};
                         if (args.length && args.length >= 1) {
-                            firstArg = args[0];
+                            url = args[0];
                             if (args.length > 1) {
                                 config = args[1];
                             }
@@ -366,22 +366,9 @@ var AjaxRequestsHandler = (function () {
                             method = config.method;
                         }
                         fetchRequestIndex = tempArray.length;
-                        var fetchUrl = '';
-                        if (typeof (firstArg) === 'object' && !!firstArg) {
-                            if (Array.isArray(firstArg) && firstArg.length > 0) {
-                                fetchUrl = firstArg[0];
-                            }
-                            else {
-                                fetchUrl = firstArg.url;
-                            }
-                        }
-                        else {
-                            fetchUrl = firstArg;
-                        }
-                        if (fetchUrl) {
-                            tempArray.push(new AjaxTiming(fetchUrl, method, true, ajaxHandler.now()));
-                        }
-                        return [firstArg, config];
+                        var fetchUrl = Array.isArray(url) && url.length > 0 ? url[0] : url;
+                        tempArray.push(new AjaxTiming(fetchUrl, method, true, ajaxHandler.now()));
+                        return [url, config];
                     }, onRequestError);
                     promise = promise.then(function (args) { return fetch.apply(void 0, args); });
                     promise = promise.then(function (response) {
@@ -620,8 +607,8 @@ var RProfiler = (function () {
             return _this.inputDelay;
         };
         this.getCPWebVitals = function () {
-            getCLS(_this.setCLS, true);
-            getLCP(_this.setLCP, true);
+            getCLS(_this.setCLS, false);
+            getLCP(_this.setLCP, false);
             return {
                 cls: _this.cls,
                 lcp: _this.lcp
@@ -630,8 +617,8 @@ var RProfiler = (function () {
         this.eventManager.add(WindowEvent.Load, window, this.recordPageLoad);
         var errorFunc = this.addError;
         this.ajaxHandler = new AjaxRequestsHandler();
-        getCLS(this.setCLS, true);
-        getLCP(this.setLCP, true);
+        getCLS(this.setCLS, false);
+        getLCP(this.setLCP, false);
         function recordJsError(e) {
             var ev = e.target || e.srcElement;
             if (ev.nodeType == 3) {
